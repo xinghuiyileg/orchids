@@ -30,8 +30,8 @@ func Load() *Config {
 		UserID:       getEnv("USER_ID", ""),
 		AgentMode:    getEnv("AGENT_MODE", "claude-opus-4.5"),
 		Email:        getEnv("EMAIL", ""),
-		AdminUser:    requireEnv("ADMIN_USER"),
-		AdminPass:    requireEnv("ADMIN_PASS"),
+		AdminUser:    getEnv("ADMIN_USER", "admin"),
+		AdminPass:    getEnv("ADMIN_PASS", "admin"),
 		AdminPath:    getEnv("ADMIN_PATH", "/admin"),
 	}
 }

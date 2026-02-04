@@ -247,45 +247,68 @@ func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) 
 
 	var openaiReq OpenAIRequest
 	if err := json.NewDecoder(r.Body).Decode(&openaiReq); err != nil {
-		http.Error(w, `{"error":{"message":"Invalid request body","type":"invalid_request_error"}}`, http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": "Invalid request body",
+				"type":    "invalid_request_error",
+			},
+		})
 		return
 	}
 
 	claudeReq := convertOpenAIToClaude(openaiReq)
 
 	body, _ := json.Marshal(claudeReq)
-	proxyReq, _ := http.NewRequest("POST", "/v1/messages", bytes.NewReader(body))
+	proxyReq, _ := http.NewRequestWithContext(r.Context(), "POST", "/v1/messages", bytes.NewReader(body))
 	proxyReq.Header.Set("Content-Type", "application/json")
 
-	rw := &responseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
+	if openaiReq.Stream {
+		h.HandleMessages(w, proxyReq)
+		return
+	}
+
+	rw := &bufferResponseWriter{header: make(http.Header), body: &bytes.Buffer{}}
 	h.HandleMessages(rw, proxyReq)
 
-	if !openaiReq.Stream {
-		var claudeResp map[string]interface{}
-		if err := json.Unmarshal(rw.body.Bytes(), &claudeResp); err != nil {
-			return
-		}
-		openaiResp := convertClaudeToOpenAI(claudeResp, openaiReq.Model)
+	var claudeResp map[string]interface{}
+	if err := json.Unmarshal(rw.body.Bytes(), &claudeResp); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(openaiResp)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": "Failed to parse response",
+				"type":    "internal_error",
+			},
+		})
+		return
 	}
+
+	openaiResp := convertClaudeToOpenAI(claudeResp, openaiReq.Model)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(openaiResp)
 }
 
-type responseWriter struct {
-	http.ResponseWriter
+type bufferResponseWriter struct {
+	header     http.Header
 	body       *bytes.Buffer
 	statusCode int
 }
 
-func (rw *responseWriter) Write(b []byte) (int, error) {
-	rw.body.Write(b)
-	return rw.ResponseWriter.Write(b)
+func (rw *bufferResponseWriter) Header() http.Header {
+	return rw.header
 }
 
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
+func (rw *bufferResponseWriter) Write(b []byte) (int, error) {
+	return rw.body.Write(b)
 }
+
+func (rw *bufferResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+}
+
+func (rw *bufferResponseWriter) Flush() {}
 
 func convertOpenAIToClaude(req OpenAIRequest) ClaudeRequest {
 	var messages []prompt.Message

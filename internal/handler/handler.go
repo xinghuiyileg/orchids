@@ -53,11 +53,16 @@ type UpstreamClient interface {
 }
 
 type ClaudeRequest struct {
-	Model    string              `json:"model"`
-	Messages []prompt.Message    `json:"messages"`
-	System   []prompt.SystemItem `json:"system"`
-	Tools    []interface{}       `json:"tools"`
-	Stream   bool                `json:"stream"`
+	Model     string              `json:"model"`
+	Messages  []prompt.Message    `json:"messages"`
+	System    []prompt.SystemItem `json:"system"`
+	Tools     []interface{}       `json:"tools"`
+	Stream    bool                `json:"stream"`
+	MaxTokens int                 `json:"max_tokens,omitempty"`
+	Thinking  *struct {
+		Type        string `json:"type"`
+		BudgetToken int    `json:"budget_tokens"`
+	} `json:"thinking,omitempty"`
 }
 
 func New(cfg *config.Config) *Handler {
@@ -91,16 +96,46 @@ func NewWithAll(cfg *config.Config, lb *loadbalancer.LoadBalancer, k *keeper.Acc
 	}
 }
 
-// mapModel 根据请求的 model 名称映射到实际使用的模型
+var ModelMapping = map[string]string{
+	"claude-opus-4-5":            "claude-opus-4.5",
+	"claude-opus-4-5-20251101":   "claude-opus-4.5",
+	"claude-haiku-4-5":           "claude-haiku-4.5",
+	"claude-haiku-4-5-20251001":  "claude-haiku-4.5",
+	"claude-sonnet-4-5":          "claude-sonnet-4.5",
+	"claude-sonnet-4-5-20250929": "claude-sonnet-4.5",
+	"claude-sonnet-4":            "claude-sonnet-4",
+	"claude-sonnet-4-20250514":   "claude-sonnet-4",
+	"claude-3-7-sonnet-20250219": "claude-3.7-sonnet",
+	"claude-3-5-sonnet-20241022": "claude-sonnet-4.5",
+	"claude-3-5-sonnet-latest":   "claude-sonnet-4.5",
+	"claude-3-5-haiku-20241022":  "claude-haiku-4.5",
+	"claude-3-5-haiku-latest":    "claude-haiku-4.5",
+	"claude-3-opus-20240229":     "claude-opus-4.5",
+	"claude-3-opus-latest":       "claude-opus-4.5",
+}
+
+var AvailableModels = []string{
+	"claude-opus-4-5", "claude-opus-4-5-20251101",
+	"claude-haiku-4-5", "claude-haiku-4-5-20251001",
+	"claude-sonnet-4-5", "claude-sonnet-4-5-20250929",
+	"claude-sonnet-4", "claude-sonnet-4-20250514", "claude-3-7-sonnet-20250219",
+	"claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest",
+	"claude-3-5-haiku-20241022", "claude-3-5-haiku-latest",
+	"claude-3-opus-20240229", "claude-3-opus-latest",
+}
+
 func mapModel(requestModel string) string {
+	if mapped, ok := ModelMapping[requestModel]; ok {
+		return mapped
+	}
 	lowerModel := strings.ToLower(requestModel)
 	if strings.Contains(lowerModel, "opus") {
 		return "claude-opus-4.5"
 	}
 	if strings.Contains(lowerModel, "haiku") {
-		return "gemini-3-flash"
+		return "claude-haiku-4.5"
 	}
-	return "claude-sonnet-4-5"
+	return "claude-sonnet-4.5"
 }
 
 // fixToolInput 修复工具输入中的类型问题
@@ -165,18 +200,19 @@ func fixToolInput(inputJSON string) string {
 
 func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	models := map[string]interface{}{
-		"object": "list",
-		"data": []map[string]interface{}{
-			{"id": "claude-opus-4-5-20251101", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
-			{"id": "claude-opus-4-20250514", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
-			{"id": "claude-sonnet-4-5-20250929", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
-			{"id": "claude-sonnet-4-20250514", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
-			{"id": "claude-3-5-sonnet-20241022", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
-			{"id": "claude-3-5-haiku-20241022", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
-		},
+	data := make([]map[string]interface{}, len(AvailableModels))
+	for i, id := range AvailableModels {
+		data[i] = map[string]interface{}{
+			"id":       id,
+			"object":   "model",
+			"created":  1700000000,
+			"owned_by": "anthropic",
+		}
 	}
-	json.NewEncoder(w).Encode(models)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"object": "list",
+		"data":   data,
+	})
 }
 
 func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
@@ -237,26 +273,30 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 构建 prompt（V2 Markdown 格式）
+	messages := req.Messages
+	if len(messages) > 50 {
+		messages = prompt.SummarizeHistory(messages, 4000)
+	}
+
+	hasCacheControl := prompt.HasCacheControl(req.System)
+
 	builtPrompt := prompt.BuildPromptV2(prompt.ClaudeAPIRequest{
-		Model:    req.Model,
-		Messages: req.Messages,
-		System:   req.System,
-		Tools:    req.Tools,
-		Stream:   req.Stream,
+		Model:     req.Model,
+		Messages:  messages,
+		System:    req.System,
+		Tools:     req.Tools,
+		Stream:    req.Stream,
+		MaxTokens: req.MaxTokens,
 	})
 
-	// 2. 记录转换后的 prompt
 	logger.LogConvertedPrompt(builtPrompt)
 
-	// 映射模型
 	mappedModel := mapModel(req.Model)
 	log.Printf("[%s] 模型映射: %s -> %s", requestID, req.Model, mappedModel)
 
 	isStream := req.Stream
 	var flusher http.Flusher
 	if isStream {
-		// 设置 SSE 响应头
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
@@ -271,7 +311,6 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 	}
 
-	// 状态管理
 	msgID := fmt.Sprintf("msg_%d", time.Now().UnixMilli())
 	blockIndex := -1
 	var hasReturn bool
@@ -282,10 +321,14 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 	var contentBlocks []map[string]interface{}
 	var currentTextIndex = -1
 
-	// Token 计数
 	inputTokens := tiktoken.EstimateTextTokens(builtPrompt)
 	var outputTokens int
+	var cacheCreationTokens, cacheReadTokens int
 	var outputMu sync.Mutex
+
+	if hasCacheControl {
+		cacheReadTokens = inputTokens / 10
+	}
 
 	addOutputTokens := func(text string) {
 		if text == "" {
@@ -297,7 +340,6 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		outputMu.Unlock()
 	}
 
-	// SSE 写入函数
 	writeSSE := func(event, data string) {
 		if !isStream {
 			return
@@ -309,12 +351,15 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
 		flusher.Flush()
-
-		// 5. 记录输出给客户端的 SSE
 		logger.LogOutputSSE(event, data)
 	}
 
-	// 发送 message_start
+	usage := map[string]int{"input_tokens": inputTokens, "output_tokens": 0}
+	if hasCacheControl {
+		usage["cache_creation_input_tokens"] = cacheCreationTokens
+		usage["cache_read_input_tokens"] = cacheReadTokens
+	}
+
 	startData, _ := json.Marshal(map[string]interface{}{
 		"type": "message_start",
 		"message": map[string]interface{}{
@@ -323,7 +368,7 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 			"role":    "assistant",
 			"content": []interface{}{},
 			"model":   req.Model,
-			"usage":   map[string]int{"input_tokens": inputTokens, "output_tokens": 0},
+			"usage":   usage,
 		},
 	})
 	writeSSE("message_start", string(startData))
@@ -625,7 +670,6 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 
 	<-done
 
-	// 确保有最终响应
 	if !hasReturn {
 		finishResponse("end_turn")
 	}
@@ -643,6 +687,15 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
+		usageResp := map[string]int{
+			"input_tokens":  inputTokens,
+			"output_tokens": outputTokens,
+		}
+		if hasCacheControl {
+			usageResp["cache_creation_input_tokens"] = cacheCreationTokens
+			usageResp["cache_read_input_tokens"] = cacheReadTokens
+		}
+
 		response := map[string]interface{}{
 			"id":            msgID,
 			"type":          "message",
@@ -651,10 +704,7 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 			"model":         req.Model,
 			"stop_reason":   stopReason,
 			"stop_sequence": nil,
-			"usage": map[string]int{
-				"input_tokens":  inputTokens,
-				"output_tokens": outputTokens,
-			},
+			"usage":         usageResp,
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	}

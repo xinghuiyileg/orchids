@@ -4,5 +4,9 @@
   },
   "expose": {
     "port": 8080
+  },
+  "healthcheck": {
+    "path": "/health",
+    "port": 8080
   }
 }

@@ -163,6 +163,20 @@ func fixToolInput(inputJSON string) string {
 	return string(result)
 }
 
+func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	models := map[string]interface{}{
+		"object": "list",
+		"data": []map[string]interface{}{
+			{"id": "claude-opus-4-20250514", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+			{"id": "claude-sonnet-4-20250514", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+			{"id": "claude-3-5-sonnet-20241022", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+			{"id": "claude-3-5-haiku-20241022", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+		},
+	}
+	json.NewEncoder(w).Encode(models)
+}
+
 func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	requestID := generateRequestID()

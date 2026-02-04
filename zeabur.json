@@ -7,6 +7,9 @@
   },
   "healthcheck": {
     "path": "/health",
-    "port": 8080
+    "port": 8080,
+    "interval": 5,
+    "timeout": 3,
+    "retries": 3
   }
 }

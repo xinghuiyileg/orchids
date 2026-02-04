@@ -481,7 +481,8 @@ func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {
 
 	var req ClaudeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("[%s] 请求解析失败: %v", requestID, err)
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
 

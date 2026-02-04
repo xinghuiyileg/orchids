@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orchids API 管理面板</title>
+    <style>
+      :root {
+        --bg-primary: #0f0f1a;
+        --bg-secondary: #1a1a2e;
+        --bg-card: rgba(255, 255, 255, 0.03);
+        --border: rgba(255, 255, 255, 0.08);
+        --text-primary: #f4f4f5;
+        --text-secondary: #a1a1aa;
+        --accent-cyan: #06b6d4;
+        --accent-purple: #8b5cf6;
+        --accent-green: #22c55e;
+        --accent-red: #ef4444;
+        --accent-orange: #f59e0b;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg-primary);
+        min-height: 100vh;
+        color: var(--text-primary);
+      }
+      .layout {
+        display: flex;
+        min-height: 100vh;
+      }
+      .sidebar {
+        width: 240px;
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border);
+        padding: 24px 16px;
+        position: fixed;
+        height: 100vh;
+        overflow-y: auto;
+      }
+      .logo {
+        font-size: 1.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 32px;
+        padding: 0 8px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        margin-bottom: 4px;
+        transition: all 0.2s;
+        cursor: pointer;
+      }
+      .nav-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-primary);
+      }
+      .nav-item.active {
+        background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(139, 92, 246, 0.15));
+        color: var(--text-primary);
+      }
+      .nav-icon {
+        width: 20px;
+        height: 20px;
+        opacity: 0.7;
+      }
+      .main {
+        flex: 1;
+        margin-left: 240px;
+        padding: 32px;
+      }
+      .page-header {
+        margin-bottom: 32px;
+      }
+      .page-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .page-desc {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 16px;
+        margin-bottom: 32px;
+      }
+      .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .stat-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+      .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+      }
+      .stat-value.cyan { color: var(--accent-cyan); }
+      .stat-value.green { color: var(--accent-green); }
+      .stat-value.red { color: var(--accent-red); }
+      .stat-value.purple { color: var(--accent-purple); }
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      .card-title {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      .card-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.813rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+        color: white;
+      }
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+      }
+      .btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .btn-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-red);
+      }
+      .btn-danger:hover {
+        background: rgba(239, 68, 68, 0.25);
+      }
+      .btn-success {
+        background: rgba(34, 197, 94, 0.15);
+        color: var(--accent-green);
+      }
+      .btn-success:hover {
+        background: rgba(34, 197, 94, 0.25);
+      }
+      .btn-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-orange);
+      }
+      .btn-warning:hover {
+        background: rgba(245, 158, 11, 0.25);
+      }
+      .btn-sm {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 14px 24px;
+        text-align: left;
+      }
+      th {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      tr {
+        border-bottom: 1px solid var(--border);
+      }
+      tr:last-child {
+        border-bottom: none;
+      }
+      tr:hover td {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+      }
+      .badge-success {
+        background: rgba(34, 197, 94, 0.15);
+        color: var(--accent-green);
+      }
+      .badge-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-red);
+      }
+      .badge-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-orange);
+      }
+      .badge-muted {
+        background: rgba(161, 161, 170, 0.15);
+        color: var(--text-secondary);
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .checkbox {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: var(--accent-purple);
+      }
+      .actions-cell {
+        display: flex;
+        gap: 6px;
+      }
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+      .modal {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 480px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      .modal-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+      }
+      .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 1.25rem;
+        cursor: pointer;
+        padding: 4px;
+      }
+      .modal-body {
+        padding: 24px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      .form-label {
+        display: block;
+        font-size: 0.813rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+      }
+      .form-input {
+        width: 100%;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.875rem;
+        transition: border-color 0.2s;
+      }
+      .form-input:focus {
+        outline: none;
+        border-color: var(--accent-purple);
+      }
+      .form-hint {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-top: 6px;
+      }
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .toggle-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .toggle {
+        position: relative;
+        width: 44px;
+        height: 24px;
+      }
+      .toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-track {
+        position: absolute;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .toggle-track::before {
+        content: "";
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        left: 3px;
+        top: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.2s;
+      }
+      .toggle input:checked + .toggle-track {
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      }
+      .toggle input:checked + .toggle-track::before {
+        transform: translateX(20px);
+      }
+      .empty-state {
+        padding: 60px 24px;
+        text-align: center;
+        color: var(--text-secondary);
+      }
+      .email-cell {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .count-cell {
+        font-variant-numeric: tabular-nums;
+      }
+      .success-count { color: var(--accent-green); }
+      .failure-count { color: var(--accent-red); }
+      @media (max-width: 1200px) {
+        .stats-grid {
+          grid-template-columns: repeat(3, 1fr);
+        }
+      }
+      @media (max-width: 768px) {
+        .sidebar {
+          display: none;
+        }
+        .main {
+          margin-left: 0;
+        }
+        .stats-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="logo">Orchids</div>
+        <nav>
+          <a href="index.html" class="nav-item active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+            账号管理
+          </a>
+          <a href="logs.html" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            实时日志
+          </a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <div class="page-header">
+          <h1 class="page-title">账号管理</h1>
+          <p class="page-desc">管理 API 账号，配置负载均衡权重</p>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">总账号</div>
+            <div class="stat-value cyan" id="totalAccounts">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">已启用</div>
+            <div class="stat-value purple" id="enabledAccounts">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">总请求</div>
+            <div class="stat-value" id="totalRequests">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">成功</div>
+            <div class="stat-value green" id="totalSuccess">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">失败</div>
+            <div class="stat-value red" id="totalFailure">0</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">账号列表</h2>
+            <div class="card-actions">
+              <button class="btn btn-success" onclick="refreshAll()">刷新全部</button>
+              <button class="btn btn-warning" onclick="checkAll()">检测封禁</button>
+              <button class="btn btn-danger" onclick="batchDelete()" id="batchDeleteBtn" style="display:none">
+                删除 (<span id="selectedCount">0</span>)
+              </button>
+              <button class="btn btn-ghost" onclick="exportAccounts()">导出</button>
+              <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">导入</button>
+              <input type="file" id="importFile" accept=".json" style="display:none" onchange="importAccounts(event)"/>
+              <button class="btn btn-primary" onclick="openModal()">+ 添加账号</button>
+            </div>
+          </div>
+          <div id="accountsList">
+            <div class="empty-state">暂无账号</div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-overlay" id="accountModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modalTitle">添加账号</h3>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="accountForm" onsubmit="saveAccount(event)">
+            <input type="hidden" id="accountId"/>
+            <div class="form-group">
+              <label class="form-label">名称</label>
+              <input type="text" class="form-input" id="name" required placeholder="账号名称"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client Cookie</label>
+              <input type="text" class="form-input" id="clientCookie" required placeholder="__client cookie 值"/>
+              <p class="form-hint">只需输入 __client cookie，其他信息自动获取</p>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">权重</label>
+                <input type="number" class="form-input" id="weight" value="1" min="1"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Agent Mode</label>
+                <input type="text" class="form-input" id="agentMode" value="claude-opus-4.5"/>
+              </div>
+            </div>
+            <div class="form-group">
+              <div class="toggle-group">
+                <label class="toggle">
+                  <input type="checkbox" id="enabled" checked/>
+                  <span class="toggle-track"></span>
+                </label>
+                <span>启用账号</span>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">保存</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let accounts = [];
+      let selectedIds = new Set();
+      let healthStatus = {};
+
+      async function loadAccounts() {
+        try {
+          const [accountsRes, healthRes] = await Promise.all([
+            fetch("/api/accounts"),
+            fetch("/api/accounts/health")
+          ]);
+          accounts = await accountsRes.json();
+          try {
+            const healthData = await healthRes.json();
+            healthStatus = {};
+            if (healthData.accounts) {
+              healthData.accounts.forEach(h => {
+                healthStatus[h.account_id] = h.is_healthy;
+              });
+            }
+          } catch (e) {
+            healthStatus = {};
+          }
+          selectedIds.clear();
+          renderAccounts();
+          updateStats();
+          updateBatchDeleteBtn();
+        } catch (err) {
+          console.error("Failed to load accounts:", err);
+        }
+      }
+
+      function getHealthBadge(accountId) {
+        if (healthStatus[accountId] === true) {
+          return '<span class="badge badge-success"><span class="dot"></span>激活</span>';
+        } else if (healthStatus[accountId] === false) {
+          return '<span class="badge badge-danger"><span class="dot"></span>未激活</span>';
+        }
+        return '<span class="badge badge-muted">未知</span>';
+      }
+
+      function toggleSelectAll(checkbox) {
+        if (checkbox.checked) {
+          accounts.forEach(acc => selectedIds.add(acc.id));
+        } else {
+          selectedIds.clear();
+        }
+        renderAccounts();
+        updateBatchDeleteBtn();
+      }
+
+      function toggleSelect(id) {
+        if (selectedIds.has(id)) {
+          selectedIds.delete(id);
+        } else {
+          selectedIds.add(id);
+        }
+        updateBatchDeleteBtn();
+      }
+
+      function updateBatchDeleteBtn() {
+        const btn = document.getElementById("batchDeleteBtn");
+        const count = document.getElementById("selectedCount");
+        if (selectedIds.size > 0) {
+          btn.style.display = "inline-flex";
+          count.textContent = selectedIds.size;
+        } else {
+          btn.style.display = "none";
+        }
+      }
+
+      async function refreshAll() {
+        if (!confirm("确定要刷新所有账号吗？")) return;
+        try {
+          const res = await fetch("/api/refresh-all", { method: "POST" });
+          const result = await res.json();
+          alert(result.success ? "刷新任务已启动" : "刷新失败");
+        } catch (err) {
+          alert("刷新失败: " + err.message);
+        }
+      }
+
+      async function checkAll() {
+        if (!confirm("确定要检测所有账号是否被封禁？这可能需要一些时间。")) return;
+        try {
+          const res = await fetch("/api/check-all", { method: "POST" });
+          const result = await res.json();
+          alert(`检测完成: 共 ${result.total} 个账号，${result.banned_count} 个被封禁已自动禁用`);
+          loadAccounts();
+        } catch (err) {
+          alert("检测失败: " + err.message);
+        }
+      }
+
+      async function checkAccount(id, name) {
+        const btn = event.target;
+        btn.textContent = "检测中...";
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/api/accounts/${id}/check`, { method: "POST" });
+          const result = await res.json();
+          if (result.banned) {
+            alert(`账号 "${name}" 已被封禁\n${result.message}`);
+          } else if (result.valid) {
+            alert(`账号 "${name}" 正常可用`);
+          } else {
+            alert(`账号 "${name}" 状态异常\n${result.message}`);
+          }
+          loadAccounts();
+        } catch (err) {
+          alert("检测失败: " + err.message);
+        }
+        btn.textContent = "检测";
+        btn.disabled = false;
+      }
+
+      async function batchDelete() {
+        if (selectedIds.size === 0) return;
+        if (!confirm(`确定要删除选中的 ${selectedIds.size} 个账号吗？`)) return;
+        try {
+          const res = await fetch("/api/batch-delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: Array.from(selectedIds) }),
+          });
+          const result = await res.json();
+          alert(`删除完成: 成功 ${result.deleted} 个`);
+          loadAccounts();
+        } catch (err) {
+          alert("删除失败: " + err.message);
+        }
+      }
+
+      function renderAccounts() {
+        const container = document.getElementById("accountsList");
+        if (accounts.length === 0) {
+          container.innerHTML = '<div class="empty-state">暂无账号，点击右上角添加</div>';
+          return;
+        }
+        const allSelected = accounts.length > 0 && accounts.every(acc => selectedIds.has(acc.id));
+        container.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px"><input type="checkbox" class="checkbox" ${allSelected ? 'checked' : ''} onchange="toggleSelectAll(this)"/></th>
+                <th>名称</th>
+                <th>Email</th>
+                <th>权重</th>
+                <th>请求</th>
+                <th>成功/失败</th>
+                <th>激活</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${accounts.map(acc => `
+                <tr>
+                  <td><input type="checkbox" class="checkbox" ${selectedIds.has(acc.id) ? 'checked' : ''} onchange="toggleSelect(${acc.id})"/></td>
+                  <td>${escapeHtml(acc.name)}</td>
+                  <td class="email-cell" title="${escapeHtml(acc.email)}">${escapeHtml(acc.email)}</td>
+                  <td>${acc.weight}</td>
+                  <td class="count-cell">${acc.request_count || 0}</td>
+                  <td class="count-cell"><span class="success-count">${acc.success_count || 0}</span> / <span class="failure-count">${acc.failure_count || 0}</span></td>
+                  <td>${getHealthBadge(acc.id)}</td>
+                  <td><span class="badge ${acc.enabled ? 'badge-success' : 'badge-danger'}"><span class="dot"></span>${acc.enabled ? '启用' : '禁用'}</span></td>
+                  <td>
+                    <div class="actions-cell">
+                      <button class="btn btn-sm btn-success" onclick="testAccount(${acc.id}, '${escapeHtml(acc.name)}')" id="test-btn-${acc.id}">激活</button>
+                      <button class="btn btn-sm btn-warning" onclick="checkAccount(${acc.id}, '${escapeHtml(acc.name)}')">检测</button>
+                      <button class="btn btn-sm btn-ghost" onclick="editAccount(${acc.id})">编辑</button>
+                      <button class="btn btn-sm btn-danger" onclick="deleteAccount(${acc.id})">删除</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      function updateStats() {
+        document.getElementById("totalAccounts").textContent = accounts.length;
+        document.getElementById("enabledAccounts").textContent = accounts.filter(a => a.enabled).length;
+        document.getElementById("totalRequests").textContent = accounts.reduce((s, a) => s + (a.request_count || 0), 0);
+        document.getElementById("totalSuccess").textContent = accounts.reduce((s, a) => s + (a.success_count || 0), 0);
+        document.getElementById("totalFailure").textContent = accounts.reduce((s, a) => s + (a.failure_count || 0), 0);
+      }
+
+      async function testAccount(id, name) {
+        const btn = document.getElementById(`test-btn-${id}`);
+        btn.textContent = "测试中...";
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/api/accounts/${id}/test`, { method: "POST" });
+          const result = await res.json();
+          if (result.success) {
+            btn.textContent = "成功";
+            alert(`账号 "${name}" 激活成功!\n耗时: ${result.duration_ms}ms`);
+            loadAccounts();
+          } else {
+            btn.textContent = "失败";
+            alert(`账号 "${name}" 激活失败!\n${result.message}`);
+          }
+        } catch (err) {
+          btn.textContent = "错误";
+          alert("测试失败: " + err.message);
+        }
+        setTimeout(() => {
+          btn.textContent = "激活";
+          btn.disabled = false;
+        }, 2000);
+      }
+
+      function openModal(account = null) {
+        const modal = document.getElementById("accountModal");
+        const title = document.getElementById("modalTitle");
+        if (account) {
+          title.textContent = "编辑账号";
+          document.getElementById("accountId").value = account.id;
+          document.getElementById("name").value = account.name;
+          document.getElementById("clientCookie").value = account.client_cookie;
+          document.getElementById("agentMode").value = account.agent_mode;
+          document.getElementById("weight").value = account.weight;
+          document.getElementById("enabled").checked = account.enabled;
+        } else {
+          title.textContent = "添加账号";
+          document.getElementById("accountForm").reset();
+          document.getElementById("accountId").value = "";
+          document.getElementById("agentMode").value = "claude-opus-4.5";
+          document.getElementById("weight").value = "1";
+          document.getElementById("enabled").checked = true;
+        }
+        modal.classList.add("active");
+      }
+
+      function closeModal() {
+        document.getElementById("accountModal").classList.remove("active");
+      }
+
+      async function saveAccount(e) {
+        e.preventDefault();
+        const id = document.getElementById("accountId").value;
+        const data = {
+          name: document.getElementById("name").value,
+          client_cookie: document.getElementById("clientCookie").value,
+          agent_mode: document.getElementById("agentMode").value,
+          weight: parseInt(document.getElementById("weight").value) || 1,
+          enabled: document.getElementById("enabled").checked,
+        };
+        try {
+          const url = id ? `/api/accounts/${id}` : "/api/accounts";
+          const method = id ? "PUT" : "POST";
+          const res = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          closeModal();
+          loadAccounts();
+        } catch (err) {
+          alert("保存失败: " + err.message);
+        }
+      }
+
+      function editAccount(id) {
+        const account = accounts.find(a => a.id === id);
+        if (account) openModal(account);
+      }
+
+      async function deleteAccount(id) {
+        if (!confirm("确定要删除这个账号吗？")) return;
+        try {
+          const res = await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+          if (!res.ok) throw new Error(await res.text());
+          loadAccounts();
+        } catch (err) {
+          alert("删除失败: " + err.message);
+        }
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text || "";
+        return div.innerHTML;
+      }
+
+      function exportAccounts() {
+        window.location.href = "/api/export";
+      }
+
+      async function importAccounts(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const res = await fetch("/api/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: text,
+          });
+          const result = await res.json();
+          alert(`导入完成: 成功 ${result.imported} 个, 跳过 ${result.skipped} 个`);
+          loadAccounts();
+        } catch (err) {
+          alert("导入失败: " + err.message);
+        }
+        event.target.value = "";
+      }
+
+      document.addEventListener("DOMContentLoaded", loadAccounts);
+    </script>
+  </body>
+</html>

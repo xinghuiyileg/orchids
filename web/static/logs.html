@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实时日志 - Orchids</title>
+  <style>
+    :root {
+      --bg-primary: #0f0f1a;
+      --bg-secondary: #1a1a2e;
+      --bg-card: rgba(255, 255, 255, 0.03);
+      --border: rgba(255, 255, 255, 0.08);
+      --text-primary: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --accent-cyan: #06b6d4;
+      --accent-purple: #8b5cf6;
+      --accent-green: #22c55e;
+      --accent-red: #ef4444;
+      --accent-orange: #f59e0b;
+      --accent-blue: #3b82f6;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-primary);
+      min-height: 100vh;
+      color: var(--text-primary);
+    }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 240px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 32px;
+      padding: 0 8px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      margin-bottom: 4px;
+      transition: all 0.2s;
+    }
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+    }
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(139, 92, 246, 0.15));
+      color: var(--text-primary);
+    }
+    .nav-icon { width: 20px; height: 20px; opacity: 0.7; }
+    .main {
+      flex: 1;
+      margin-left: 240px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .page-title {
+      font-size: 1.75rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-red);
+      animation: pulse 2s infinite;
+    }
+    .status-dot.connected { background: var(--accent-green); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      min-width: 140px;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .stat-value.cyan { color: var(--accent-cyan); }
+    .stat-value.green { color: var(--accent-green); }
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-group label {
+      color: var(--text-secondary);
+      font-size: 0.813rem;
+    }
+    select, input[type="text"] {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.813rem;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--accent-purple);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.813rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: rgba(255, 255, 255, 0.1); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: white;
+    }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--accent-red);
+    }
+    .log-container {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .log-header {
+      display: grid;
+      grid-template-columns: 60px 140px 70px 120px 160px 1fr 70px;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .log-list {
+      flex: 1;
+      overflow-y: auto;
+      font-family: "SF Mono", Monaco, monospace;
+      font-size: 0.813rem;
+    }
+    .log-entry {
+      display: grid;
+      grid-template-columns: 60px 140px 70px 120px 160px 1fr 70px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry:hover { background: rgba(255, 255, 255, 0.02); }
+    .log-entry.new {
+      animation: highlight 1s ease-out;
+    }
+    @keyframes highlight {
+      from { background: rgba(139, 92, 246, 0.2); }
+      to { background: transparent; }
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.688rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-info {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-blue);
+    }
+    .badge-error {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--accent-red);
+    }
+    .badge-warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-orange);
+    }
+    .message {
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .duration { color: var(--text-secondary); }
+    .empty-state {
+      padding: 60px 24px;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+    .scroll-indicator {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--accent-purple);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      cursor: pointer;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      font-size: 0.813rem;
+    }
+    .scroll-indicator.show { display: block; }
+    .log-list::-webkit-scrollbar { width: 6px; }
+    .log-list::-webkit-scrollbar-track { background: transparent; }
+    .log-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="logo">Orchids</div>
+      <nav>
+        <a href="index.html" class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          账号管理
+        </a>
+        <a href="logs.html" class="nav-item active">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          实时日志
+        </a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="page-header">
+        <h1 class="page-title">
+          <span class="status-dot" id="statusDot"></span>
+          实时日志
+        </h1>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">日志数</div>
+          <div class="stat-value cyan" id="totalLogs">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">连接状态</div>
+          <div class="stat-value" id="connectionStatus">离线</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">监听者</div>
+          <div class="stat-value green" id="listeners">0</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="filter-group">
+          <label>级别:</label>
+          <select id="levelFilter">
+            <option value="">全部</option>
+            <option value="info">INFO</option>
+            <option value="error">ERROR</option>
+            <option value="warn">WARN</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>搜索:</label>
+          <input type="text" id="searchInput" placeholder="搜索消息...">
+        </div>
+        <button class="btn btn-ghost" onclick="clearLogs()">清空</button>
+        <button class="btn btn-ghost" onclick="toggleAutoScroll()">
+          <span id="autoScrollText">自动滚动: 开</span>
+        </button>
+        <button class="btn btn-danger" onclick="reconnect()" id="reconnectBtn" style="display:none">重新连接</button>
+      </div>
+
+      <div class="log-container">
+        <div class="log-header">
+          <div>ID</div>
+          <div>时间</div>
+          <div>级别</div>
+          <div>账号</div>
+          <div>请求ID</div>
+          <div>消息</div>
+          <div>耗时</div>
+        </div>
+        <div class="log-list" id="logList">
+          <div class="empty-state" id="emptyState">
+            等待日志...
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="scroll-indicator" id="scrollIndicator" onclick="scrollToBottom()">↓ 新日志</div>
+
+  <script>
+    let logs = [];
+    let eventSource = null;
+    let autoScroll = true;
+    let isAtBottom = true;
+    const maxLogs = 500;
+
+    function formatTime(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleString('zh-CN', {
+        month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+    }
+
+    function formatDuration(ms) {
+      if (!ms) return '-';
+      if (ms < 1000) return ms + 'ms';
+      return (ms / 1000).toFixed(2) + 's';
+    }
+
+    function getLevelBadge(level) {
+      const cls = level === 'error' ? 'badge-error' : level === 'warn' ? 'badge-warn' : 'badge-info';
+      return `<span class="badge ${cls}">${level}</span>`;
+    }
+
+    function renderLogs() {
+      const logList = document.getElementById('logList');
+      const emptyState = document.getElementById('emptyState');
+      const levelFilter = document.getElementById('levelFilter').value;
+      const searchText = document.getElementById('searchInput').value.toLowerCase();
+
+      let filtered = logs.filter(log => {
+        if (levelFilter && log.level !== levelFilter) return false;
+        if (searchText && !log.message?.toLowerCase().includes(searchText) &&
+            !log.account?.toLowerCase().includes(searchText) &&
+            !log.request_id?.toLowerCase().includes(searchText)) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        emptyState.style.display = 'block';
+        logList.innerHTML = '';
+        logList.appendChild(emptyState);
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      const html = filtered.map((log, i) => `
+        <div class="log-entry ${i === filtered.length - 1 ? 'new' : ''}">
+          <div>${log.id}</div>
+          <div>${formatTime(log.timestamp)}</div>
+          <div>${getLevelBadge(log.level)}</div>
+          <div>${log.account || '-'}</div>
+          <div>${log.request_id || '-'}</div>
+          <div class="message" title="${log.message || ''}">${log.message || ''}</div>
+          <div class="duration">${formatDuration(log.duration_ms)}</div>
+        </div>
+      `).join('');
+
+      logList.innerHTML = html;
+      if (autoScroll && isAtBottom) scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      const logList = document.getElementById('logList');
+      logList.scrollTop = logList.scrollHeight;
+      document.getElementById('scrollIndicator').classList.remove('show');
+    }
+
+    function checkScrollPosition() {
+      const logList = document.getElementById('logList');
+      isAtBottom = logList.scrollHeight - logList.scrollTop - logList.clientHeight < 50;
+      if (!isAtBottom && logs.length > 0) {
+        document.getElementById('scrollIndicator').classList.add('show');
+      } else {
+        document.getElementById('scrollIndicator').classList.remove('show');
+      }
+    }
+
+    function toggleAutoScroll() {
+      autoScroll = !autoScroll;
+      document.getElementById('autoScrollText').textContent = `自动滚动: ${autoScroll ? '开' : '关'}`;
+    }
+
+    function clearLogs() {
+      logs = [];
+      renderLogs();
+      document.getElementById('totalLogs').textContent = '0';
+    }
+
+    function connect() {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource('/api/logs/stream', { withCredentials: true });
+
+      eventSource.addEventListener('connected', (e) => {
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('connectionStatus').textContent = '在线';
+        document.getElementById('reconnectBtn').style.display = 'none';
+        loadHistoryLogs();
+      });
+
+      eventSource.addEventListener('log', (e) => {
+        const log = JSON.parse(e.data);
+        logs.push(log);
+        if (logs.length > maxLogs) logs = logs.slice(-maxLogs);
+        document.getElementById('totalLogs').textContent = logs.length;
+        renderLogs();
+      });
+
+      eventSource.onerror = () => {
+        document.getElementById('statusDot').classList.remove('connected');
+        document.getElementById('connectionStatus').textContent = '离线';
+        document.getElementById('reconnectBtn').style.display = 'inline-flex';
+        setTimeout(() => {
+          if (document.getElementById('connectionStatus').textContent === '离线') connect();
+        }, 5000);
+      };
+    }
+
+    function reconnect() { connect(); }
+
+    async function loadHistoryLogs() {
+      try {
+        const res = await fetch('/api/logs?limit=100', { credentials: 'include' });
+        const data = await res.json();
+        if (data.logs?.length > 0) {
+          logs = data.logs;
+          document.getElementById('totalLogs').textContent = logs.length;
+          renderLogs();
+        }
+      } catch (err) {
+        console.error('Failed to load history:', err);
+      }
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/logs/stats', { credentials: 'include' });
+        const data = await res.json();
+        document.getElementById('listeners').textContent = data.listeners;
+      } catch (err) {}
+    }
+
+    document.getElementById('logList').addEventListener('scroll', checkScrollPosition);
+    document.getElementById('levelFilter').addEventListener('change', renderLogs);
+    document.getElementById('searchInput').addEventListener('input', renderLogs);
+
+    connect();
+    setInterval(loadStats, 5000);
+  </script>
+</body>
+</html>

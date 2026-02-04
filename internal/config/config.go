@@ -21,7 +21,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:         getEnv("PORT", "3002"),
+		Port:         getEnv("PORT", "8080"),
 		DebugEnabled: getEnv("DEBUG_ENABLED", "false") == "true",
 		SessionID:    getEnv("SESSION_ID", ""),
 		ClientCookie: getEnv("CLIENT_COOKIE", ""),

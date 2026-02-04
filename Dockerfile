@@ -22,6 +22,6 @@ COPY --from=builder /app/web ./web
 
 RUN mkdir -p /app/data /app/debug
 
-EXPOSE 3002
+EXPOSE 8080
 
 CMD ["./server"]

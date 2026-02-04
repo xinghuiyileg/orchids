@@ -168,7 +168,9 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 	models := map[string]interface{}{
 		"object": "list",
 		"data": []map[string]interface{}{
+			{"id": "claude-opus-4-5-20251101", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
 			{"id": "claude-opus-4-20250514", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+			{"id": "claude-sonnet-4-5-20250929", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
 			{"id": "claude-sonnet-4-20250514", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
 			{"id": "claude-3-5-sonnet-20241022", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
 			{"id": "claude-3-5-haiku-20241022", "object": "model", "created": 1700000000, "owned_by": "anthropic"},

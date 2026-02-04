@@ -17,7 +17,8 @@
       "mcp__playwright__browser_run_code",
       "mcp__playwright__browser_close",
       "mcp__playwright__browser_wait_for",
-      "Bash(git -c http.proxy=http://127.0.0.1:7898 push)"
+      "Bash(git -c http.proxy=http://127.0.0.1:7898 push)",
+      "mcp__playwright__browser_evaluate"
     ]
   }
 }

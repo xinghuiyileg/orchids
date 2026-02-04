@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -213,6 +214,237 @@ func (h *Handler) HandleModels(w http.ResponseWriter, r *http.Request) {
 		"object": "list",
 		"data":   data,
 	})
+}
+
+type OpenAIMessage struct {
+	Role       string      `json:"role"`
+	Content    interface{} `json:"content"`
+	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`
+	ToolCallID string      `json:"tool_call_id,omitempty"`
+}
+
+type ToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+type OpenAIRequest struct {
+	Model    string          `json:"model"`
+	Messages []OpenAIMessage `json:"messages"`
+	Stream   bool            `json:"stream"`
+	Tools    []interface{}   `json:"tools,omitempty"`
+}
+
+func (h *Handler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var openaiReq OpenAIRequest
+	if err := json.NewDecoder(r.Body).Decode(&openaiReq); err != nil {
+		http.Error(w, `{"error":{"message":"Invalid request body","type":"invalid_request_error"}}`, http.StatusBadRequest)
+		return
+	}
+
+	claudeReq := convertOpenAIToClaude(openaiReq)
+
+	body, _ := json.Marshal(claudeReq)
+	proxyReq, _ := http.NewRequest("POST", "/v1/messages", bytes.NewReader(body))
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	rw := &responseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
+	h.HandleMessages(rw, proxyReq)
+
+	if !openaiReq.Stream {
+		var claudeResp map[string]interface{}
+		if err := json.Unmarshal(rw.body.Bytes(), &claudeResp); err != nil {
+			return
+		}
+		openaiResp := convertClaudeToOpenAI(claudeResp, openaiReq.Model)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(openaiResp)
+	}
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	body       *bytes.Buffer
+	statusCode int
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	rw.body.Write(b)
+	return rw.ResponseWriter.Write(b)
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func convertOpenAIToClaude(req OpenAIRequest) ClaudeRequest {
+	var messages []prompt.Message
+	var system []prompt.SystemItem
+
+	for _, msg := range req.Messages {
+		if msg.Role == "system" {
+			text := ""
+			switch c := msg.Content.(type) {
+			case string:
+				text = c
+			}
+			system = append(system, prompt.SystemItem{Type: "text", Text: text})
+			continue
+		}
+
+		var content prompt.MessageContent
+		switch c := msg.Content.(type) {
+		case string:
+			content = prompt.MessageContent{Text: c}
+		case []interface{}:
+			var blocks []prompt.ContentBlock
+			for _, item := range c {
+				if m, ok := item.(map[string]interface{}); ok {
+					blockType, _ := m["type"].(string)
+					if blockType == "text" {
+						text, _ := m["text"].(string)
+						blocks = append(blocks, prompt.ContentBlock{Type: "text", Text: text})
+					}
+				}
+			}
+			content = prompt.MessageContent{Blocks: blocks}
+		}
+
+		if msg.Role == "tool" {
+			blocks := []prompt.ContentBlock{{
+				Type:      "tool_result",
+				ToolUseID: msg.ToolCallID,
+				Content:   msg.Content,
+			}}
+			messages = append(messages, prompt.Message{Role: "user", Content: prompt.MessageContent{Blocks: blocks}})
+			continue
+		}
+
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			var blocks []prompt.ContentBlock
+			if content.Text != "" {
+				blocks = append(blocks, prompt.ContentBlock{Type: "text", Text: content.Text})
+			}
+			for _, tc := range msg.ToolCalls {
+				var input interface{}
+				json.Unmarshal([]byte(tc.Function.Arguments), &input)
+				blocks = append(blocks, prompt.ContentBlock{
+					Type:  "tool_use",
+					ID:    tc.ID,
+					Name:  tc.Function.Name,
+					Input: input,
+				})
+			}
+			messages = append(messages, prompt.Message{Role: "assistant", Content: prompt.MessageContent{Blocks: blocks}})
+			continue
+		}
+
+		messages = append(messages, prompt.Message{Role: msg.Role, Content: content})
+	}
+
+	var tools []interface{}
+	for _, t := range req.Tools {
+		if tm, ok := t.(map[string]interface{}); ok {
+			if fn, ok := tm["function"].(map[string]interface{}); ok {
+				tools = append(tools, map[string]interface{}{
+					"name":         fn["name"],
+					"description":  fn["description"],
+					"input_schema": fn["parameters"],
+				})
+			}
+		}
+	}
+
+	return ClaudeRequest{
+		Model:    req.Model,
+		Messages: messages,
+		System:   system,
+		Stream:   req.Stream,
+		Tools:    tools,
+	}
+}
+
+func convertClaudeToOpenAI(resp map[string]interface{}, model string) map[string]interface{} {
+	content, _ := resp["content"].([]interface{})
+	usage, _ := resp["usage"].(map[string]interface{})
+	stopReason, _ := resp["stop_reason"].(string)
+
+	var textContent string
+	var toolCalls []map[string]interface{}
+
+	for _, block := range content {
+		if b, ok := block.(map[string]interface{}); ok {
+			blockType, _ := b["type"].(string)
+			if blockType == "text" {
+				text, _ := b["text"].(string)
+				textContent += text
+			} else if blockType == "tool_use" {
+				id, _ := b["id"].(string)
+				name, _ := b["name"].(string)
+				input, _ := b["input"]
+				args, _ := json.Marshal(input)
+				toolCalls = append(toolCalls, map[string]interface{}{
+					"id":   id,
+					"type": "function",
+					"function": map[string]interface{}{
+						"name":      name,
+						"arguments": string(args),
+					},
+				})
+			}
+		}
+	}
+
+	finishReason := "stop"
+	if stopReason == "tool_use" {
+		finishReason = "tool_calls"
+	}
+
+	message := map[string]interface{}{
+		"role":    "assistant",
+		"content": textContent,
+	}
+	if len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
+	}
+
+	promptTokens := 0
+	completionTokens := 0
+	if usage != nil {
+		if v, ok := usage["input_tokens"].(float64); ok {
+			promptTokens = int(v)
+		}
+		if v, ok := usage["output_tokens"].(float64); ok {
+			completionTokens = int(v)
+		}
+	}
+
+	return map[string]interface{}{
+		"id":      resp["id"],
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   model,
+		"choices": []map[string]interface{}{{
+			"index":         0,
+			"message":       message,
+			"finish_reason": finishReason,
+		}},
+		"usage": map[string]interface{}{
+			"prompt_tokens":     promptTokens,
+			"completion_tokens": completionTokens,
+			"total_tokens":      promptTokens + completionTokens,
+		},
+	}
 }
 
 func (h *Handler) HandleMessages(w http.ResponseWriter, r *http.Request) {

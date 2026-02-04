@@ -84,7 +84,7 @@ func main() {
 	mux.HandleFunc("/v1/messages", h.HandleMessages)
 	mux.HandleFunc("/v1/models", h.HandleModels)
 	mux.HandleFunc("/v1/chat/completions", h.HandleChatCompletions)
-	mux.HandleFunc("/chat-stream", h.HandleChatCompletions)
+	mux.HandleFunc("/chat-stream", h.HandleMessages)
 
 	mux.HandleFunc("/api/accounts", middleware.BasicAuth(cfg.AdminUser, cfg.AdminPass, apiHandler.HandleAccounts))
 	mux.HandleFunc("/api/accounts/", middleware.BasicAuth(cfg.AdminUser, cfg.AdminPass, apiHandler.HandleAccountByID))
